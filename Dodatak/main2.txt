@@ -1,0 +1,131 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <p30fxxxx.h>
+#include "adc.h"
+#include "driverGLCD.h"
+#include "pocetak.h"
+
+#define DRIVE_A PORTCbits.RC13
+#define DRIVE_B PORTCbits.RC14
+
+_FOSC(CSW_FSCM_OFF & XT_PLL4);//instruction takt je isti kao i kristal 10MHz
+_FWDT(WDT_OFF);
+//_FOSC(CSW_ON_FSCM_OFF & HS3_PLL4);
+_FGS(CODE_PROT_OFF);
+
+unsigned int X, Y,x_vrednost, y_vrednost;
+unsigned int brojac_ms,stoperica,ms,sekund;
+
+
+//const unsigned int ADC_THRESHOLD = 900; 
+const unsigned int AD_Xmin =220;
+const unsigned int AD_Xmax =3642;
+const unsigned int AD_Ymin =520;
+const unsigned int AD_Ymax =3450;
+
+
+unsigned int sirovi0,sirovi1,sirovi2;
+unsigned int broj,broj1,broj2,tempRX, temp0,temp1;
+
+void __attribute__ ((__interrupt__)) _T2Interrupt(void) // svakih 1ms
+{
+
+		TMR2 =0;
+     ms=1;//fleg za milisekundu ili prekid;potrebno ga je samo resetovati u funkciji
+
+	brojac_ms++;//brojac milisekundi
+    stoperica++;//brojac za funkciju Delay_ms
+
+    if (brojac_ms==1000)//sek
+        {
+          brojac_ms=0;
+          sekund=1;//fleg za sekundu
+		 } 
+	IFS0bits.T2IF = 0; 
+       
+}
+
+void __attribute__((__interrupt__)) _U1RXInterrupt(void) 
+{
+    IFS0bits.U1RXIF = 0;
+  //   tempRX=U1RXREG;
+
+} 
+
+void __attribute__((__interrupt__)) _ADCInterrupt(void) 
+{
+	sirovi0=ADCBUF0;
+    	IFS0bits.ADIF = 0;
+
+}
+
+int main(int argc, char** argv) {
+    
+    ConfigureLCDPins();
+	ConfigureTSPins();
+
+	GLCD_LcdInit();
+
+	GLCD_ClrScr();
+	
+	ConfigureADCPins();
+    Init_T2();
+    
+    TRISDbits.TRISD9=0;
+    TRISDbits.TRISD8=1;
+    
+    for(broj1=0;broj1<10000;broj1++);
+
+		TRISBbits.TRISB11=1;
+
+		for(broj=0;broj<60000;broj++);
+
+
+		initUART1();//inicijalizacija UART-a
+        //initUART2();
+ 		ADCinit();//inicijalizacija AD konvertora
+
+		ADCON1bits.ADON=1;//pocetak Ad konverzije
+        TRISAbits.TRISA11 = 0;
+	while(1)
+	{
+        if(  sirovi0 <= 580 )
+        {   
+            LATAbits.LATA11 = 0;
+        }
+        else if( sirovi0 >= 581 && sirovi0 <= 780)
+        {
+            if(PORTDbits.RD8)
+            {
+            LATDbits.LATD9=1;
+            Delay_ms (20);
+            LATDbits.LATD9=0;
+            Delay_ms (180);
+            LATDbits.LATD9=1;
+            }
+            LATAbits.LATA11 = 1;
+            Delay_ms(20);
+            LATAbits.LATA11 = 0;
+            Delay_ms(180); 
+        }
+        else if(sirovi0 >= 781 &&  sirovi0 <=1200)
+        {
+            LATAbits.LATA11 = 1;
+            Delay_ms(20);
+            LATAbits.LATA11 = 0;
+            Delay_ms(60); 
+        }
+        else
+        {
+            LATAbits.LATA11 = 1;
+            Delay_ms(20);
+            LATAbits.LATA11 = 0;
+            Delay_ms(30); 
+        }
+        WriteUART1dec2string(sirovi0);
+        WriteUART1(13);//enter
+
+	}//od whilea
+
+    return (EXIT_SUCCESS);
+}
